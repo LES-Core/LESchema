@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/public/icon.svg" width="96" alt="Логотип LESchema">
+<img src="logo.png" width="180" alt="Логотип LESchema">
 
 # LESchema
 
@@ -11,9 +11,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React Flow](https://img.shields.io/badge/React_Flow-FF0072?style=for-the-badge&logo=react&logoColor=white)](https://reactflow.dev/)
 [![GPL v3](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge)](LICENSE)
-
-[**Скачать LESchema.exe**](https://github.com/LES-Core/LESchema/releases/latest/download/LESchema.exe) ·
-[Все релизы](https://github.com/LES-Core/LESchema/releases)
 
 </div>
 

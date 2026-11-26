@@ -6,7 +6,7 @@ import {
 } from '@xyflow/react';
 import type { Connection, EdgeChange, NodeChange } from '@xyflow/react';
 import {
-  ArrowDownToLine, ChevronDown, FilePlus2, FolderOpen, GitBranch, Keyboard, MousePointer2,
+  ArrowDownToLine, ChevronDown, FilePlus2, FolderOpen, Keyboard, MousePointer2,
   Redo2, Save, Trash2, Undo2,
 } from 'lucide-react';
 import {
@@ -280,7 +280,10 @@ function Editor() {
   return (
     <main className="editor">
       <header className="app-header">
-        <div className="brand"><span className="brand-mark"><GitBranch size={20} /></span><div><strong>LES<span>chema</span></strong><small>Редактор блок-схем</small></div></div>
+        <div className="brand">
+          <img className="brand-mark" src="/icon.png" width="44" height="44" alt="" />
+          <div><strong>LES<span>chema</span></strong><small>Редактор блок-схем</small></div>
+        </div>
         <div className="header-actions">
           <button className="button header-save" type="button" title="Сохранить схему (Ctrl+S)" onClick={save}><Save size={17} /><span>Сохранить</span></button>
           <div className="export-root" ref={menuRoot}>
@@ -377,7 +380,12 @@ function Editor() {
           >
             <Background gap={24} size={1.2} color="#344358" />
           </ReactFlow>
-          {!diagram.nodes.length && <div className="empty-stage"><GitBranch size={28} /><p>Добавьте блок из панели слева</p></div>}
+          {!diagram.nodes.length && (
+            <div className="empty-stage">
+              <img src="/icon.png" width="48" height="48" alt="" />
+              <p>Добавьте блок из панели слева</p>
+            </div>
+          )}
           <ZoomControls />
         </div>
       </div>

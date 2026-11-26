@@ -37,17 +37,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .brand, .header-actions, .button, .tool-group, .project-name { display: flex; align-items: center; }
 .brand { gap: 12px; }
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  color: #78edac;
-  background: #102e2a;
-  border: 1px solid #215745;
-  box-shadow: 0 0 16px #22bf7320;
-}
+.brand-mark { display: block; flex: none; }
 .brand strong { display: block; font-size: 16px; letter-spacing: .015em; line-height: 1.2; }
 .brand strong span { color: #a0edc5; }
 .brand small { display: block; margin-top: 3px; color: #9ba9bf; font-size: 11px; letter-spacing: .025em; }
