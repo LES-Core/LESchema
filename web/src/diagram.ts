@@ -2,10 +2,15 @@ import { getSmoothStepPath, MarkerType, Position } from '@xyflow/react';
 import type { Edge, Node, XYPosition } from '@xyflow/react';
 
 export const shapes = {
-  terminal: { name: 'Начало / конец', text: 'Начало', color: '#106c53', fill: '#e5f8ef', stroke: '#70b49b', canvas: { color: '#b1f7d6', fill: '#143a32', stroke: '#399e74' } },
   process: { name: 'Действие', text: 'Действие', color: '#244a9c', fill: '#ebf1ff', stroke: '#8da7e8', canvas: { color: '#ccdeff', fill: '#1b304d', stroke: '#608ac0' } },
   decision: { name: 'Условие', text: 'Условие?', color: '#845213', fill: '#fff5de', stroke: '#d5a44c', canvas: { color: '#ffe3a5', fill: '#3b3020', stroke: '#b68a46' } },
+  terminal: { name: 'Начало / конец', text: 'Начало', color: '#106c53', fill: '#e5f8ef', stroke: '#70b49b', canvas: { color: '#b1f7d6', fill: '#143a32', stroke: '#399e74' } },
+  subroutine: { name: 'Подпрограмма', text: 'Подпрограмма', color: '#29488e', fill: '#eef2ff', stroke: '#7f97d3', canvas: { color: '#dbe5ff', fill: '#202f52', stroke: '#7a99db' } },
   input: { name: 'Ввод / вывод', text: 'Ввод данных', color: '#634199', fill: '#f4ecff', stroke: '#aa91d7', canvas: { color: '#ecd9ff', fill: '#302441', stroke: '#9876bb' } },
+  display: { name: 'Дисплей', text: 'Показать на экране', color: '#11616b', fill: '#e6f7f8', stroke: '#72adba', canvas: { color: '#b2edf1', fill: '#17383d', stroke: '#519cac' } },
+  loop: { name: 'Цикл for', text: 'Цикл for', color: '#884318', fill: '#fff0e5', stroke: '#d49b6a', canvas: { color: '#ffdab8', fill: '#3c2b21', stroke: '#bc895c' } },
+  link: { name: 'Ссылка', text: 'A', color: '#43546d', fill: '#edf3f8', stroke: '#8b9fb3', canvas: { color: '#dce8f6', fill: '#27384a', stroke: '#849caf' } },
+  comment: { name: 'Текст / комментарий', text: 'Комментарий', color: '#394b62', fill: 'none', stroke: 'none', canvas: { color: '#c1d0e3', fill: 'none', stroke: 'none' } },
 } as const;
 
 export type Shape = keyof typeof shapes;
@@ -34,13 +39,13 @@ const anchors: Record<Side, XYPosition> = {
   left: { x: 0, y: height / 2 },
 };
 
-export const inputInset = 17.5;
+const horizontalInsets: Partial<Record<Shape, number>> = { input: 17.5, link: 49 };
 
 export function anchor(kind: Shape, side: Side): XYPosition {
   const point = anchors[side];
-  if (kind !== 'input') return point;
-  if (side === 'left') return { x: inputInset, y: point.y };
-  if (side === 'right') return { x: width - inputInset, y: point.y };
+  const inset = horizontalInsets[kind] ?? 0;
+  if (side === 'left') return { x: inset, y: point.y };
+  if (side === 'right') return { x: width - inset, y: point.y };
   return point;
 }
 
@@ -48,8 +53,15 @@ export const contours: Record<Shape, string> = {
   terminal: 'M42 1H138A41 41 0 0 1 138 83H42A41 41 0 0 1 42 1Z',
   process: 'M11 1H169Q179 1 179 11V73Q179 83 169 83H11Q1 83 1 73V11Q1 1 11 1Z',
   decision: 'M90 1L179 42 90 83 1 42Z',
+  subroutine: 'M1 1H179V83H1Z',
   input: 'M25 1H170L155 83H10Z',
+  display: 'M35 1H138A41 41 0 0 1 138 83H35L1 42Z',
+  loop: 'M36 1H144L179 42 144 83H36L1 42Z',
+  link: 'M90 1A41 41 0 1 1 90 83A41 41 0 1 1 90 1Z',
+  comment: '',
 };
+
+export const subroutineDividers = 'M24 1V83M156 1V83';
 
 export function block(id: string, kind: Shape, text: string, x: number, y: number): Block {
   return { id, type: 'block', data: { kind, text }, position: { x, y }, initialWidth: width, initialHeight: height };
@@ -100,10 +112,7 @@ export function textWidth(text: string, size: number, weight: number) {
   return measure.measureText(text).width;
 }
 
-export function blockLines(kind: Shape, value: string) {
-  const size = kind === 'decision' ? 13 : 14;
-  const maxWidth = kind === 'decision' ? 92 : 136;
-  const maxLines = kind === 'decision' ? 2 : 3;
+function wrapLabel(value: string, size: number, maxWidth: number, maxLines: number) {
   const lines: string[] = [];
 
   for (const paragraph of value.split('\n')) {
@@ -133,6 +142,28 @@ export function blockLines(kind: Shape, value: string) {
   while (last.length && textWidth(last.join('') + '…', size, 600) > maxWidth) last.pop();
   visible[maxLines - 1] = last.join('') + '…';
   return visible;
+}
+
+const labelLayout: Partial<Record<Shape, { fontSize: number; maxWidth: number; maxLines: number }>> = {
+  decision: { fontSize: 13, maxWidth: 92, maxLines: 2 },
+  subroutine: { fontSize: 14, maxWidth: 118, maxLines: 3 },
+  display: { fontSize: 14, maxWidth: 118, maxLines: 3 },
+  loop: { fontSize: 14, maxWidth: 118, maxLines: 3 },
+  link: { fontSize: 14, maxWidth: 54, maxLines: 2 },
+  comment: { fontSize: 14, maxWidth: 164, maxLines: 4 },
+};
+
+export function blockLabel(kind: Shape, value: string) {
+  const { fontSize, maxWidth, maxLines } = labelLayout[kind] ?? { fontSize: 14, maxWidth: 136, maxLines: 3 };
+  const wrapped = wrapLabel(value, fontSize, maxWidth, maxLines);
+  const lineHeight = kind === 'decision' ? 16 : 18;
+  return {
+    fontSize,
+    lines: wrapped.map((text, index) => ({
+      text,
+      y: height / 2 + (index - (wrapped.length - 1) / 2) * lineHeight + 4.5,
+    })),
+  };
 }
 
 export const maxBlocks = 500;

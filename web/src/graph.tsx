@@ -5,17 +5,28 @@ import {
 import type { EdgeProps, NodeProps } from '@xyflow/react';
 import { Maximize, Minus, Plus } from 'lucide-react';
 import {
-  blockLines, contours, canvasEdgeColor, height, inputInset, positions, route, shapes, sides, width,
+  anchor, blockLabel, contours, canvasEdgeColor, height, positions, route, shapes, sides, subroutineDividers, width,
 } from './diagram';
-import type { Arrow, Block, Shape } from './diagram';
+import type { Arrow, Block, Shape, Side } from './diagram';
 
 export function ShapePreview({ kind }: { kind: Shape }) {
   const style = shapes[kind].canvas;
   return (
     <svg width="30" height="20" viewBox="-5 -6 190 96" aria-hidden="true">
-      <path d={contours[kind]} fill={style.fill} stroke={style.stroke} strokeWidth="6" />
+      {kind === 'comment' ? (
+        <text x={width / 2} y="71" fill={style.color} textAnchor="middle" fontSize="76" fontWeight="600">T</text>
+      ) : (
+        <path d={contours[kind]} fill={style.fill} stroke={style.stroke} strokeWidth="6" />
+      )}
+      {kind === 'subroutine' && <path d={subroutineDividers} fill="none" stroke={style.stroke} strokeWidth="6" />}
     </svg>
   );
+}
+
+function handleStyle(kind: Shape, side: Side) {
+  if (side === 'left') return { left: anchor(kind, side).x };
+  if (side === 'right') return { right: width - anchor(kind, side).x };
+  return undefined;
 }
 
 export function BlockView({ data, id, selected }: NodeProps<Block>) {
@@ -28,25 +39,22 @@ export function BlockView({ data, id, selected }: NodeProps<Block>) {
     }
   }, [data.kind, id, updateNodeInternals]);
   const style = shapes[data.kind].canvas;
-  const lines = blockLines(data.kind, data.text);
-  const lineHeight = data.kind === 'decision' ? 16 : 18;
+  const contour = contours[data.kind];
+  const { lines, fontSize } = blockLabel(data.kind, data.text);
   return (
     <div className={`diagram-block${selected ? ' is-selected' : ''}`} style={{ width, height }} title={data.text}>
       <svg viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-        <path className="selected-outline" d={contours[data.kind]} fill="none" stroke="var(--accent)" strokeWidth="7" />
-        <path d={contours[data.kind]} fill={style.fill} stroke={style.stroke} strokeWidth="1.8" />
-        <g fill={style.color} textAnchor="middle" fontSize={data.kind === 'decision' ? 13 : 14} fontWeight="600">
-          {lines.map((line, index) => (
-            <text key={index} x={width / 2} y={height / 2 + (index - (lines.length - 1) / 2) * lineHeight + 4.5}>
-              {line}
-            </text>
-          ))}
+        <path className="selected-outline" d={contour || contours.process} fill="none" stroke="var(--accent)" strokeWidth="7" />
+        {contour && <path d={contour} fill={style.fill} stroke={style.stroke} strokeWidth="1.8" />}
+        {data.kind === 'subroutine' && <path d={subroutineDividers} fill="none" stroke={style.stroke} strokeWidth="1.8" />}
+        <g fill={style.color} textAnchor="middle" fontSize={fontSize} fontWeight="600">
+          {lines.map(({ text, y }, index) => <text key={index} x={width / 2} y={y}>{text}</text>)}
         </g>
       </svg>
       {sides.map(side => (
         <Handle
           key={side} id={side} type="source" position={positions[side]}
-          style={data.kind === 'input' && (side === 'left' || side === 'right') ? { [side]: inputInset } : undefined}
+          style={handleStyle(data.kind, side)}
           aria-label={`Точка соединения ${side}`}
         />
       ))}

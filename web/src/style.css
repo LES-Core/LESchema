@@ -147,7 +147,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 44px;
+  min-height: 37px;
   padding: 6px 10px;
   margin: 6px 0;
   border: 1px solid var(--border);

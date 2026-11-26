@@ -1,4 +1,4 @@
-import { anchor, blockLines, contours, edgeColor, height, positions, route, shapes, textWidth, typeface, width } from './diagram';
+import { anchor, blockLabel, contours, edgeColor, height, positions, route, shapes, subroutineDividers, textWidth, typeface, width } from './diagram';
 import type { Diagram, Side } from './diagram';
 
 export const imageFormats = {
@@ -61,12 +61,14 @@ function renderSvg(diagram: Diagram) {
 
   const blocks = diagram.nodes.map(({ position, data }) => {
     const style = shapes[data.kind];
-    const lines = blockLines(data.kind, data.text);
-    const lineHeight = data.kind === 'decision' ? 16 : 18;
-    const text = lines.map((line, index) =>
-      `<text x="${width / 2}" y="${height / 2 + (index - (lines.length - 1) / 2) * lineHeight + 4.5}">${escapeXml(line)}</text>`,
-    );
-    return `<g transform="translate(${position.x} ${position.y})"><path d="${contours[data.kind]}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.8" /><g fill="${style.color}" font-size="${data.kind === 'decision' ? 13 : 14}">${text.join('')}</g></g>`;
+    const contour = contours[data.kind];
+    const outline = contour ? `<path d="${contour}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.8" />` : '';
+    const dividers = data.kind === 'subroutine'
+      ? `<path d="${subroutineDividers}" fill="none" stroke="${style.stroke}" stroke-width="1.8" />`
+      : '';
+    const { lines, fontSize } = blockLabel(data.kind, data.text);
+    const text = lines.map(({ text, y }) => `<text x="${width / 2}" y="${y}">${escapeXml(text)}</text>`);
+    return `<g transform="translate(${position.x} ${position.y})">${outline}${dividers}<g fill="${style.color}" font-size="${fontSize}">${text.join('')}</g></g>`;
   });
 
   const imageWidth = Math.ceil(right - left);
