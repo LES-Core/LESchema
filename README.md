@@ -24,6 +24,7 @@
 - [🚀 Быстрый старт](#-быстрый-старт)
 - [🛠️ Сборка и разработка](#️-сборка-и-разработка)
 - [📄 Лицензия](#-лицензия)
+- [🧩 Другие проекты](#-другие-проекты)
 
 ## 📖 О проекте
 
@@ -75,4 +76,32 @@ dotnet publish app/LESchema.csproj -c Release -r win-x64 --self-contained true -
 
 ## 📄 Лицензия
 
-[GNU General Public License v3](LICENSE).
+<div align="center">
+
+Проект распространяется под лицензией **GNU General Public License v3**.
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu&logoColor=white)](LICENSE)
+
+**© 2026 LESchema**
+
+</div>
+
+---
+
+## 🧩 Другие проекты
+
+<div align="center">
+
+Другие проекты можно посмотреть в организации **LES-Core**.
+
+👉 **[github.com/LES-Core](https://github.com/LES-Core)**
+
+</div>
+
+---
+
+<div align="center">
+
+### ⭐ Если вам понравился проект, поставьте звёздочку на GitHub!
+
+</div>
