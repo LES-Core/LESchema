@@ -10,12 +10,13 @@ import {
   Redo2, Save, Trash2, Undo2,
 } from 'lucide-react';
 import {
-  arrow, block, clean, deserialize, height, maxArrows, maxBlocks, maxCoordinate, sample, serialize, shapes, sides, width,
+  arrow, block, blockSize, clean, deserialize, height, maxArrows, maxBlocks, maxCoordinate, sample, serialize, shapes, sides, width,
 } from './diagram';
 import type { Arrow, Block, Diagram, Shape, Side } from './diagram';
 import { download, exportImage, imageFormats } from './export';
 import type { ImageFormat } from './export';
 import { edgeTypes, fitOptions, nodeTypes, ShapePreview, ZoomControls } from './graph';
+import { serializeProgramForYou } from './program-for-you';
 import '@xyflow/react/dist/style.css';
 import './style.css';
 
@@ -35,7 +36,7 @@ function Editor() {
   const stage = useRef<HTMLDivElement>(null);
   const menuRoot = useRef<HTMLDivElement>(null);
   const textEditor = useRef<HTMLTextAreaElement>(null);
-  const dragStart = useRef<Diagram | null>(null);
+  const geometryStart = useRef<Diagram | null>(null);
   const textSaved = useRef(false);
   const flow = useReactFlow<Block, Arrow>();
   const selectedBlocks = diagram.nodes.filter(node => node.selected);
@@ -124,6 +125,17 @@ function Editor() {
     }
   }
 
+  function exportProgramForYou() {
+    setMenu(false);
+    try {
+      const json = serializeProgramForYou(current.current);
+      download(new Blob([json], { type: 'application/json' }), `${filename()}-programforyou.json`);
+      setNotice('JSON для ProgramForYou подготовлен к загрузке.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Не удалось подготовить JSON для ProgramForYou.');
+    }
+  }
+
   function addBlock(kind: Shape) {
     const bounds = stage.current?.getBoundingClientRect();
     if (!bounds) return;
@@ -133,11 +145,19 @@ function Editor() {
       return;
     }
     const point = flow.screenToFlowPosition({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
-    const x = Math.max(-maxCoordinate, Math.min(maxCoordinate, point.x - width / 2));
-    let y = Math.max(-maxCoordinate, Math.min(maxCoordinate, point.y - height / 2));
-    const step = y > maxCoordinate / 2 ? -24 : 24;
-    while (state.nodes.some(item => Math.abs(item.position.x - x) < width && Math.abs(item.position.y - y) < height)) {
-      y += step;
+    const x = Math.max(-maxCoordinate, Math.min(maxCoordinate - width, point.x - width / 2));
+    let y = Math.max(-maxCoordinate, Math.min(maxCoordinate - height, point.y - height / 2));
+    const moveUp = y > maxCoordinate / 2;
+    const rectangles = state.nodes.map(item => ({ ...item.position, ...blockSize(item) }));
+    while (y >= -maxCoordinate && y + height <= maxCoordinate) {
+      const overlapping = rectangles.find(rect => x < rect.x + rect.width && rect.x < x + width
+        && y < rect.y + rect.height && rect.y < y + height);
+      if (!overlapping) break;
+      y = moveUp ? overlapping.y - height - 12 : overlapping.y + overlapping.height + 12;
+    }
+    if (y < -maxCoordinate || y + height > maxCoordinate) {
+      setNotice('Переместите поле, чтобы освободить место для блока.');
+      return;
     }
     const next = block(crypto.randomUUID(), kind, shapes[kind].text, x, y);
     remember();
@@ -181,9 +201,13 @@ function Editor() {
 
   function changeNodes(changes: NodeChange<Block>[]) {
     const state = current.current;
+    if (changes.some(change => change.type === 'dimensions' && change.resizing)) {
+      geometryStart.current ??= clean(state);
+    }
     const moved = changes.some(change => change.type === 'position' && change.position);
-    if (moved && !dragStart.current) remember();
+    if (moved && !geometryStart.current) remember();
     update({ ...state, nodes: applyNodeChanges(changes, state.nodes) });
+    if (changes.some(change => change.type === 'dimensions' && change.resizing === false)) finishGeometryChange();
   }
 
   function changeEdges(changes: EdgeChange<Arrow>[]) {
@@ -191,12 +215,16 @@ function Editor() {
     update({ ...state, edges: applyEdgeChanges(changes, state.edges) });
   }
 
-  function finishDrag() {
-    const previous = dragStart.current;
-    dragStart.current = null;
+  function finishGeometryChange() {
+    const previous = geometryStart.current;
+    geometryStart.current = null;
     if (previous?.nodes.some((item, index) => {
-      const now = current.current.nodes[index]?.position;
-      return now && (now.x !== item.position.x || now.y !== item.position.y);
+      const now = current.current.nodes[index];
+      if (!now || now.id !== item.id) return false;
+      const beforeSize = blockSize(item);
+      const afterSize = blockSize(now);
+      return now.position.x !== item.position.x || now.position.y !== item.position.y
+        || beforeSize.width !== afterSize.width || beforeSize.height !== afterSize.height;
     })) remember(previous);
   }
 
@@ -297,6 +325,9 @@ function Editor() {
                     <strong>{imageFormats[format].label}</strong><small>{imageFormats[format].description}</small>
                   </button>
                 ))}
+                <button type="button" onClick={exportProgramForYou}>
+                  <strong>JSON</strong><small>Для ProgramForYou</small>
+                </button>
               </div>
             )}
           </div>
@@ -367,10 +398,10 @@ function Editor() {
           <ReactFlow
             nodes={diagram.nodes} edges={diagram.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onNodesChange={changeNodes} onEdgesChange={changeEdges}
-            onNodeDragStart={() => { dragStart.current = clean(current.current); }}
-            onNodeDragStop={finishDrag}
-            onSelectionDragStart={() => { dragStart.current ??= clean(current.current); }}
-            onSelectionDragStop={finishDrag}
+            onNodeDragStart={() => { geometryStart.current ??= clean(current.current); }}
+            onNodeDragStop={finishGeometryChange}
+            onSelectionDragStart={() => { geometryStart.current ??= clean(current.current); }}
+            onSelectionDragStop={finishGeometryChange}
             onNodeDoubleClick={() => requestAnimationFrame(() => textEditor.current?.focus())}
             onConnect={connect} isValidConnection={validConnection} connectionMode={ConnectionMode.Loose}
             connectionLineType={ConnectionLineType.SmoothStep} connectionLineStyle={{ stroke: '#5de7a3', strokeWidth: 2 }}

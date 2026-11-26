@@ -1,4 +1,7 @@
-import { anchor, blockLabel, contours, edgeColor, height, positions, route, shapes, subroutineDividers, textWidth, typeface, width } from './diagram';
+import {
+  anchor, blockLabel, blockSize, contours, edgeColor, outlineTransform, positions, route, shapes,
+  subroutineDividers, textWidth, typeface,
+} from './diagram';
 import type { Diagram, Side } from './diagram';
 
 export const imageFormats = {
@@ -30,8 +33,8 @@ function renderSvg(diagram: Diagram) {
   const margin = 58;
   let left = Math.min(...diagram.nodes.map(node => node.position.x)) - margin;
   let top = Math.min(...diagram.nodes.map(node => node.position.y)) - margin;
-  let right = Math.max(...diagram.nodes.map(node => node.position.x + width)) + margin;
-  let bottom = Math.max(...diagram.nodes.map(node => node.position.y + height)) + margin;
+  let right = Math.max(...diagram.nodes.map(node => node.position.x + blockSize(node).width)) + margin;
+  let bottom = Math.max(...diagram.nodes.map(node => node.position.y + blockSize(node).height)) + margin;
 
   const labels: string[] = [];
   const paths = diagram.edges.map(edge => {
@@ -40,8 +43,8 @@ function renderSvg(diagram: Diagram) {
     const from = edge.sourceHandle as Side;
     const to = edge.targetHandle as Side;
     if (!source || !target) return '';
-    const sourceAnchor = anchor(source.data.kind, from);
-    const targetAnchor = anchor(target.data.kind, to);
+    const sourceAnchor = anchor(source.data.kind, from, blockSize(source));
+    const targetAnchor = anchor(target.data.kind, to, blockSize(target));
     const [path, x, y] = route(
       { x: source.position.x + sourceAnchor.x, y: source.position.y + sourceAnchor.y },
       { x: target.position.x + targetAnchor.x, y: target.position.y + targetAnchor.y },
@@ -59,15 +62,19 @@ function renderSvg(diagram: Diagram) {
     return `<path d="${path}" fill="none" stroke="${edgeColor}" stroke-width="2" marker-end="url(#arrow)" />`;
   });
 
-  const blocks = diagram.nodes.map(({ position, data }) => {
+  const blocks = diagram.nodes.map(node => {
+    const { position, data } = node;
+    const size = blockSize(node);
     const style = shapes[data.kind];
     const contour = contours[data.kind];
-    const outline = contour ? `<path d="${contour}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.8" />` : '';
-    const dividers = data.kind === 'subroutine'
-      ? `<path d="${subroutineDividers}" fill="none" stroke="${style.stroke}" stroke-width="1.8" />`
+    const outline = contour
+      ? `<path d="${contour}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke" transform="${outlineTransform(size)}" />`
       : '';
-    const { lines, fontSize } = blockLabel(data.kind, data.text);
-    const text = lines.map(({ text, y }) => `<text x="${width / 2}" y="${y}">${escapeXml(text)}</text>`);
+    const dividers = data.kind === 'subroutine'
+      ? `<path d="${subroutineDividers}" fill="none" stroke="${style.stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke" transform="${outlineTransform(size)}" />`
+      : '';
+    const { lines, fontSize } = blockLabel(data.kind, data.text, size);
+    const text = lines.map(({ text, y }) => `<text x="${size.width / 2}" y="${y}">${escapeXml(text)}</text>`);
     return `<g transform="translate(${position.x} ${position.y})">${outline}${dividers}<g fill="${style.color}" font-size="${fontSize}">${text.join('')}</g></g>`;
   });
 

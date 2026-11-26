@@ -1,5 +1,5 @@
 import { getSmoothStepPath, MarkerType, Position } from '@xyflow/react';
-import type { Edge, Node, XYPosition } from '@xyflow/react';
+import type { Dimensions, Edge, Node, XYPosition } from '@xyflow/react';
 
 export const shapes = {
   process: { name: 'Действие', text: 'Действие', color: '#244a9c', fill: '#ebf1ff', stroke: '#8da7e8', canvas: { color: '#ccdeff', fill: '#1b304d', stroke: '#608ac0' } },
@@ -21,6 +21,10 @@ export type Side = 'top' | 'right' | 'bottom' | 'left';
 export const sides = ['top', 'right', 'bottom', 'left'] as const;
 export const width = 180;
 export const height = 84;
+export const minBlockWidth = 96;
+export const minBlockHeight = 48;
+export const maxBlockSize = 1200;
+const defaultBlockSize = { width, height };
 export const edgeColor = '#586477';
 export const canvasEdgeColor = '#93a7c0';
 export const typeface = 'system-ui, sans-serif';
@@ -41,12 +45,11 @@ const anchors: Record<Side, XYPosition> = {
 
 const horizontalInsets: Partial<Record<Shape, number>> = { input: 17.5, link: 49 };
 
-export function anchor(kind: Shape, side: Side): XYPosition {
+export function anchor(kind: Shape, side: Side, size = defaultBlockSize): XYPosition {
   const point = anchors[side];
   const inset = horizontalInsets[kind] ?? 0;
-  if (side === 'left') return { x: inset, y: point.y };
-  if (side === 'right') return { x: width - inset, y: point.y };
-  return point;
+  const x = side === 'left' ? inset : side === 'right' ? width - inset : point.x;
+  return { x: x * size.width / width, y: point.y * size.height / height };
 }
 
 export const contours: Record<Shape, string> = {
@@ -63,8 +66,20 @@ export const contours: Record<Shape, string> = {
 
 export const subroutineDividers = 'M24 1V83M156 1V83';
 
-export function block(id: string, kind: Shape, text: string, x: number, y: number): Block {
-  return { id, type: 'block', data: { kind, text }, position: { x, y }, initialWidth: width, initialHeight: height };
+export function blockSize(node: Pick<Block, 'width' | 'height' | 'initialWidth' | 'initialHeight'>): Dimensions {
+  return { width: node.width ?? node.initialWidth ?? width, height: node.height ?? node.initialHeight ?? height };
+}
+
+export function outlineTransform(size: Dimensions) {
+  return `scale(${size.width / width} ${size.height / height})`;
+}
+
+export function block(id: string, kind: Shape, text: string, x: number, y: number, size = defaultBlockSize): Block {
+  return {
+    id, type: 'block', data: { kind, text }, position: { x, y },
+    initialWidth: size.width, initialHeight: size.height,
+    ...(size.width !== width || size.height !== height ? size : {}),
+  };
 }
 
 export function arrow(id: string, source: string, target: string, sourceHandle: Side, targetHandle: Side, label = ''): Arrow {
@@ -96,10 +111,10 @@ export function sample(): Diagram {
   };
 }
 
-export function route(start: XYPosition, end: XYPosition, from: Position, to: Position) {
+export function route(start: XYPosition, end: XYPosition, from: Position, to: Position, borderRadius = 9) {
   return getSmoothStepPath({
     sourceX: start.x, sourceY: start.y, targetX: end.x, targetY: end.y,
-    sourcePosition: from, targetPosition: to, borderRadius: 9, offset: 22,
+    sourcePosition: from, targetPosition: to, borderRadius, offset: 22,
   });
 }
 
@@ -153,15 +168,17 @@ const labelLayout: Partial<Record<Shape, { fontSize: number; maxWidth: number; m
   comment: { fontSize: 14, maxWidth: 164, maxLines: 4 },
 };
 
-export function blockLabel(kind: Shape, value: string) {
+export function blockLabel(kind: Shape, value: string, size = defaultBlockSize) {
   const { fontSize, maxWidth, maxLines } = labelLayout[kind] ?? { fontSize: 14, maxWidth: 136, maxLines: 3 };
-  const wrapped = wrapLabel(value, fontSize, maxWidth, maxLines);
   const lineHeight = kind === 'decision' ? 16 : 18;
+  const widthLimit = maxWidth * size.width / width;
+  const lineLimit = Math.max(1, Math.floor(maxLines * size.height / height));
+  const wrapped = wrapLabel(value, fontSize, widthLimit, lineLimit);
   return {
     fontSize,
     lines: wrapped.map((text, index) => ({
       text,
-      y: height / 2 + (index - (wrapped.length - 1) / 2) * lineHeight + 4.5,
+      y: size.height / 2 + (index - (wrapped.length - 1) / 2) * lineHeight + 4.5,
     })),
   };
 }
@@ -172,7 +189,10 @@ export const maxCoordinate = 100_000;
 
 export function clean(diagram: Diagram): Diagram {
   return {
-    nodes: diagram.nodes.map(({ id, data, position }) => block(id, data.kind, data.text, position.x, position.y)),
+    nodes: diagram.nodes.map(node => {
+      const { id, data, position } = node;
+      return block(id, data.kind, data.text, position.x, position.y, blockSize(node));
+    }),
     edges: diagram.edges.map(({ id, source, target, sourceHandle, targetHandle, data }) =>
       arrow(id, source, target, sourceHandle as Side, targetHandle as Side, data?.text)),
   };
@@ -207,6 +227,14 @@ function coordinate(value: unknown) {
   return value;
 }
 
+function dimension(value: unknown, minimum: number, fallback: number) {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < minimum || value > maxBlockSize) {
+    throw new Error('В файле указан недопустимый размер блока.');
+  }
+  return value;
+}
+
 function side(value: unknown): Side {
   const found = sides.find(item => item === value);
   if (!found) throw new Error('У стрелки указана неизвестная точка соединения.');
@@ -236,7 +264,11 @@ export function deserialize(value: string): Diagram {
     const kind = string(data.kind, 20);
     if (ids.has(id) || !Object.hasOwn(shapes, kind)) throw new Error('В файле есть некорректный блок.');
     ids.add(id);
-    return block(id, kind as Shape, string(data.text, 300), coordinate(position.x), coordinate(position.y));
+    const size = {
+      width: dimension(node.width ?? node.initialWidth, minBlockWidth, width),
+      height: dimension(node.height ?? node.initialHeight, minBlockHeight, height),
+    };
+    return block(id, kind as Shape, string(data.text, 300), coordinate(position.x), coordinate(position.y), size);
   });
   const edgeIds = new Set<string>();
   const edges = schema.edges.map(entry => {

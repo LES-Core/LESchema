@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef } from 'react';
 import {
-  BaseEdge, Handle, useReactFlow, useUpdateNodeInternals, useViewport,
+  BaseEdge, Handle, NodeResizeControl, useReactFlow, useUpdateNodeInternals, useViewport,
 } from '@xyflow/react';
-import type { EdgeProps, NodeProps } from '@xyflow/react';
+import type { Dimensions, EdgeProps, NodeProps, ShouldResize } from '@xyflow/react';
 import { Maximize, Minus, Plus } from 'lucide-react';
 import {
-  anchor, blockLabel, contours, canvasEdgeColor, height, positions, route, shapes, sides, subroutineDividers, width,
+  anchor, blockLabel, contours, canvasEdgeColor, height, maxBlockSize, maxCoordinate, minBlockHeight, minBlockWidth,
+  outlineTransform, positions, route, shapes, sides, subroutineDividers, width,
 } from './diagram';
 import type { Arrow, Block, Shape, Side } from './diagram';
 
@@ -23,13 +24,17 @@ export function ShapePreview({ kind }: { kind: Shape }) {
   );
 }
 
-function handleStyle(kind: Shape, side: Side) {
-  if (side === 'left') return { left: anchor(kind, side).x };
-  if (side === 'right') return { right: width - anchor(kind, side).x };
+const corners = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
+const withinCanvas: ShouldResize = (_, rect) => rect.x >= -maxCoordinate && rect.y >= -maxCoordinate
+  && rect.x + rect.width <= maxCoordinate && rect.y + rect.height <= maxCoordinate;
+
+function handleStyle(kind: Shape, side: Side, size: Dimensions) {
+  if (side === 'left') return { left: anchor(kind, side, size).x };
+  if (side === 'right') return { right: size.width - anchor(kind, side, size).x };
   return undefined;
 }
 
-export function BlockView({ data, id, selected }: NodeProps<Block>) {
+export function BlockView({ data, id, selected, width: blockWidth = width, height: blockHeight = height }: NodeProps<Block>) {
   const updateNodeInternals = useUpdateNodeInternals();
   const previousKind = useRef(data.kind);
   useLayoutEffect(() => {
@@ -40,21 +45,32 @@ export function BlockView({ data, id, selected }: NodeProps<Block>) {
   }, [data.kind, id, updateNodeInternals]);
   const style = shapes[data.kind].canvas;
   const contour = contours[data.kind];
-  const { lines, fontSize } = blockLabel(data.kind, data.text);
+  const size = { width: blockWidth, height: blockHeight };
+  const { lines, fontSize } = blockLabel(data.kind, data.text, size);
   return (
-    <div className={`diagram-block${selected ? ' is-selected' : ''}`} style={{ width, height }} title={data.text}>
-      <svg viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-        <path className="selected-outline" d={contour || contours.process} fill="none" stroke="var(--accent)" strokeWidth="7" />
-        {contour && <path d={contour} fill={style.fill} stroke={style.stroke} strokeWidth="1.8" />}
-        {data.kind === 'subroutine' && <path d={subroutineDividers} fill="none" stroke={style.stroke} strokeWidth="1.8" />}
+    <div className={`diagram-block${selected ? ' is-selected' : ''}`} style={size} title={data.text}>
+      <svg viewBox={`0 0 ${blockWidth} ${blockHeight}`} aria-hidden="true">
+        <g transform={outlineTransform(size)}>
+          <path className="selected-outline" d={contour || contours.process} fill="none" stroke="var(--accent)" strokeWidth="7" vectorEffect="non-scaling-stroke" />
+          {contour && <path d={contour} fill={style.fill} stroke={style.stroke} strokeWidth="1.8" vectorEffect="non-scaling-stroke" />}
+          {data.kind === 'subroutine' && <path d={subroutineDividers} fill="none" stroke={style.stroke} strokeWidth="1.8" vectorEffect="non-scaling-stroke" />}
+        </g>
         <g fill={style.color} textAnchor="middle" fontSize={fontSize} fontWeight="600">
-          {lines.map(({ text, y }, index) => <text key={index} x={width / 2} y={y}>{text}</text>)}
+          {lines.map(({ text, y }, index) => <text key={index} x={blockWidth / 2} y={y}>{text}</text>)}
         </g>
       </svg>
+      {selected && corners.map(position => (
+        <NodeResizeControl
+          key={position} position={position} className="resize-corner"
+          minWidth={minBlockWidth} minHeight={minBlockHeight} maxWidth={maxBlockSize} maxHeight={maxBlockSize}
+          keepAspectRatio={data.kind === 'link'}
+          shouldResize={withinCanvas}
+        />
+      ))}
       {sides.map(side => (
         <Handle
           key={side} id={side} type="source" position={positions[side]}
-          style={handleStyle(data.kind, side)}
+          style={handleStyle(data.kind, side, size)}
           aria-label={`Точка соединения ${side}`}
         />
       ))}

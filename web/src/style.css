@@ -200,6 +200,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .diagram-block svg { display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .selected-outline { opacity: 0; }
 .is-selected .selected-outline { opacity: .34; }
+.diagram-block .resize-corner {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: #0b1525;
+  z-index: 2;
+}
+.diagram-block .resize-corner:hover { background: var(--accent); }
 .diagram-block .react-flow__handle {
   min-width: 12px;
   min-height: 12px;
